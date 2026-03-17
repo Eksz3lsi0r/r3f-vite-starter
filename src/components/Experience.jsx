@@ -24,9 +24,12 @@ export const Experience = () => {
         <meshStandardMaterial color="#cccccc" />
       </mesh>
 
-      {/* Physics world – wraps all rigid bodies and joints */}
+      {/* Physics world – wraps both player kendama rigs */}
       <Physics gravity={[0, -9.81, 0]}>
-        <KendamaRig />
+        {/* Player 1 – left side (red) */}
+        <KendamaRig playerId={1} positionX={-1.2} />
+        {/* Player 2 – right side (blue) */}
+        <KendamaRig playerId={2} positionX={1.2} />
       </Physics>
     </>
   );

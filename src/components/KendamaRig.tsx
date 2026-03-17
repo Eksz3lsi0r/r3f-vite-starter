@@ -8,7 +8,8 @@ import {
 } from '@react-three/rapier'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
-import { useTrickStore } from '../store/useTrickStore'
+import { useTrickStore, type PlayerId, COMBO_POINTS } from '../store/useTrickStore'
+import { useDuelStore } from '../store/useDuelStore'
 
 // ─── Rope / rig constants ────────────────────────────────────────────────────
 const STRING_SEGMENTS = 6
@@ -25,6 +26,12 @@ const TAMA_START_Y =
   KEN_HALF_HEIGHT -
   (STRING_SEGMENTS + 1) * SEGMENT_LENGTH -
   TAMA_RADIUS
+
+// Player colours
+const PLAYER_COLORS: Record<PlayerId, { tama: string; ken: string; cup: string }> = {
+  1: { tama: '#E53935', ken: '#8B4513', cup: '#A0522D' },
+  2: { tama: '#1E88E5', ken: '#4A148C', cup: '#6A1B9A' },
+}
 
 // ─── Spherical joint helper component ───────────────────────────────────────
 // We put each joint in its own component so the hook is called at the top level
@@ -111,9 +118,10 @@ function RopeVisual({ kenRef, segmentRefs, tamaRef }: RopeVisualProps) {
 
 // ─── HUD overlay (DOM) ───────────────────────────────────────────────────────
 function TrickHUD() {
-  const currentState = useTrickStore((s) => s.currentState)
-  const sequence = useTrickStore((s) => s.sequence)
-  const lastCombo = useTrickStore((s) => s.lastCombo)
+  const players = useTrickStore((s) => s.players)
+  const activePlayer = useDuelStore((s) => s.activePlayer)
+
+  const p = players[activePlayer]
 
   return (
     <div
@@ -133,18 +141,22 @@ function TrickHUD() {
       }}
     >
       <div>
-        <b>State:</b> {currentState}
+        <b>P{activePlayer} State:</b> {p.currentState}
       </div>
       <div>
-        <b>Sequence:</b> [{sequence.join(' → ')}]
+        <b>Sequence:</b> [{p.sequence.join(' → ')}]
       </div>
-      {lastCombo && (
+      {p.lastCombo && (
         <div style={{ color: '#ffe135', fontWeight: 'bold', fontSize: 16 }}>
-          🎉 {lastCombo}
+          🎉 {p.lastCombo}
         </div>
       )}
       <div style={{ marginTop: 6, fontSize: 11, opacity: 0.7 }}>
         Space: throw &nbsp;|&nbsp; Arrows: move &nbsp;|&nbsp; Q/E: spin
+        <br />
+        F: flip &nbsp;|&nbsp; G: sling &nbsp;|&nbsp; H: ghost
+        <br />
+        R: rewind flip &nbsp;|&nbsp; T: rewind sling &nbsp;|&nbsp; Tab: switch
         <br />
         <span style={{ opacity: 0.6 }}>📱 Touch: use on-screen buttons</span>
       </div>
@@ -153,7 +165,12 @@ function TrickHUD() {
 }
 
 // ─── Main KendamaRig component ───────────────────────────────────────────────
-export function KendamaRig() {
+interface KendamaRigProps {
+  playerId: PlayerId
+  positionX?: number
+}
+
+export function KendamaRig({ playerId, positionX = 0 }: KendamaRigProps) {
   const kenRef = useRef<RapierRigidBody>(null)
   const tamaRef = useRef<RapierRigidBody>(null)
   const bigCupSensorRef = useRef<RapierRigidBody>(null)
@@ -171,12 +188,27 @@ export function KendamaRig() {
   const prevSpaceRef = useRef(false)
   const prevQRef = useRef(false)
   const prevERef = useRef(false)
+  const prevFRef = useRef(false)
+  const prevGRef = useRef(false)
+  const prevHRef = useRef(false)
+  const prevRRef = useRef(false)
+  const prevTRef = useRef(false)
+
   const { setCurrentState, addToSequence } = useTrickStore()
+  const activePlayer = useDuelStore((s) => s.activePlayer)
+  const startTimeWindow = useDuelStore((s) => s.startTimeWindow)
+  const addScore = useDuelStore((s) => s.addScore)
+  const colors = PLAYER_COLORS[playerId]
 
   // ── Keyboard input ──────────────────────────────────────────────────────
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       keysRef.current[e.code] = true
+      // Tab switches active player (only handle once per rig to avoid double-fire)
+      if (e.code === 'Tab' && playerId === 1) {
+        e.preventDefault()
+        useDuelStore.getState().switchPlayer()
+      }
     }
     const onKeyUp = (e: KeyboardEvent) => {
       keysRef.current[e.code] = false
@@ -187,19 +219,24 @@ export function KendamaRig() {
       window.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('keyup', onKeyUp)
     }
-  }, [])
+  }, [playerId])
 
   // ── Per-frame physics input + sensor tracking ───────────────────────────
   useFrame(() => {
     if (!kenRef.current) return
+
+    // Only process inputs for the active player
+    const isActive = activePlayer === playerId
+    if (!isActive) return
+
     const keys = keysRef.current
 
     // Space – one-shot throw impulse
     const spaceNow = !!keys['Space']
     if (spaceNow && !prevSpaceRef.current) {
       kenRef.current.applyImpulse({ x: 0, y: 4.5, z: 0 }, true)
-      setCurrentState('AIRBORNE')
-      addToSequence('THROW')
+      setCurrentState(playerId, 'AIRBORNE')
+      addToSequence(playerId, 'THROW')
     }
     prevSpaceRef.current = spaceNow
 
@@ -220,10 +257,60 @@ export function KendamaRig() {
     const eNow = !!keys['KeyE']
     if (qNow) kenRef.current.applyTorqueImpulse({ x: 0, y: torqueScale, z: 0 }, true)
     if (eNow) kenRef.current.applyTorqueImpulse({ x: 0, y: -torqueScale, z: 0 }, true)
-    if (qNow && !prevQRef.current) addToSequence('TILT_LEFT')
-    if (eNow && !prevERef.current) addToSequence('TILT_RIGHT')
+    if (qNow && !prevQRef.current) addToSequence(playerId, 'TILT_LEFT')
+    if (eNow && !prevERef.current) addToSequence(playerId, 'TILT_RIGHT')
     prevQRef.current = qNow
     prevERef.current = eNow
+
+    // ── New trick inputs ────────────────────────────────────────────────
+    // Flip (F) – strong forward torque to flip the ken
+    const fNow = !!keys['KeyF']
+    if (fNow && !prevFRef.current) {
+      kenRef.current.applyTorqueImpulse({ x: 0.15, y: 0, z: 0 }, true)
+      kenRef.current.applyImpulse({ x: 0, y: 1.5, z: 0 }, true)
+      addToSequence(playerId, 'FLIP')
+      startTimeWindow('FLIP')
+    }
+    prevFRef.current = fNow
+
+    // Sling (G) – lateral swing + upward impulse
+    const gNow = !!keys['KeyG']
+    if (gNow && !prevGRef.current) {
+      kenRef.current.applyImpulse({ x: 1.2, y: 2.0, z: 0 }, true)
+      kenRef.current.applyTorqueImpulse({ x: 0, y: 0, z: 0.1 }, true)
+      addToSequence(playerId, 'SLING')
+      startTimeWindow('SLING')
+    }
+    prevGRef.current = gNow
+
+    // Ghost (H) – very subtle upward lift
+    const hNow = !!keys['KeyH']
+    if (hNow && !prevHRef.current) {
+      kenRef.current.applyImpulse({ x: 0, y: 0.8, z: 0 }, true)
+      addToSequence(playerId, 'GHOST')
+      startTimeWindow('GHOST')
+    }
+    prevHRef.current = hNow
+
+    // Rewind Flip (R) – reverse direction flip
+    const rNow = !!keys['KeyR']
+    if (rNow && !prevRRef.current) {
+      kenRef.current.applyTorqueImpulse({ x: -0.15, y: 0, z: 0 }, true)
+      kenRef.current.applyImpulse({ x: 0, y: 1.5, z: 0 }, true)
+      addToSequence(playerId, 'REWIND_FLIP')
+      startTimeWindow('REWIND_FLIP')
+    }
+    prevRRef.current = rNow
+
+    // Rewind Sling (T) – reverse lateral swing
+    const tNow = !!keys['KeyT']
+    if (tNow && !prevTRef.current) {
+      kenRef.current.applyImpulse({ x: -1.2, y: 2.0, z: 0 }, true)
+      kenRef.current.applyTorqueImpulse({ x: 0, y: 0, z: -0.1 }, true)
+      addToSequence(playerId, 'REWIND_SLING')
+      startTimeWindow('REWIND_SLING')
+    }
+    prevTRef.current = tNow
 
     // Update kinematic cup / spike sensors to follow the Ken each frame
     const kenPos = kenRef.current.translation()
@@ -252,16 +339,28 @@ export function KendamaRig() {
     moveSensor(spikeSensorRef, new THREE.Vector3(0, KEN_HALF_HEIGHT + 0.1, 0))
   })
 
+  // Helper: handle combo scoring on catch
+  const handleCatch = (type: 'CUP' | 'SPIKE', state: 'CUPPED' | 'SPIKED') => {
+    setCurrentState(playerId, state)
+    addToSequence(playerId, type)
+    // Check if a combo was just formed
+    const store = useTrickStore.getState()
+    const p = store.players[playerId]
+    if (p.lastCombo) {
+      addScore(playerId, p.lastCombo)
+    }
+  }
+
   // Initial Y for each rope segment
   const segmentStartY = (i: number) =>
     KEN_START_Y - KEN_HALF_HEIGHT - (i + 0.5) * SEGMENT_LENGTH
 
   return (
-    <>
+    <group position={[positionX, 0, 0]}>
       {/* ── Ken (handle) ───────────────────────────────────────────────────── */}
       <RigidBody
         ref={kenRef}
-        position={[0, KEN_START_Y, 0]}
+        position={[positionX, KEN_START_Y, 0]}
         linearDamping={0.4}
         angularDamping={0.6}
         colliders={false}
@@ -272,25 +371,25 @@ export function KendamaRig() {
         {/* Main handle cylinder */}
         <mesh>
           <cylinderGeometry args={[0.025, 0.035, KEN_HALF_HEIGHT * 2, 8]} />
-          <meshStandardMaterial color="#8B4513" roughness={0.7} />
+          <meshStandardMaterial color={colors.ken} roughness={0.7} />
         </mesh>
 
         {/* Spike tip (visual only – sensor handled separately) */}
         <mesh position={[0, KEN_HALF_HEIGHT + 0.04, 0]}>
           <coneGeometry args={[0.01, 0.08, 8]} />
-          <meshStandardMaterial color="#8B4513" roughness={0.6} />
+          <meshStandardMaterial color={colors.ken} roughness={0.6} />
         </mesh>
 
         {/* Big cup visual (bottom) */}
         <mesh position={[0, -KEN_HALF_HEIGHT - 0.02, 0]}>
           <cylinderGeometry args={[0.07, 0.035, 0.04, 16]} />
-          <meshStandardMaterial color="#A0522D" roughness={0.6} />
+          <meshStandardMaterial color={colors.cup} roughness={0.6} />
         </mesh>
 
         {/* Small cup visual (upper) */}
         <mesh position={[0, KEN_HALF_HEIGHT - 0.04, 0]} rotation={[Math.PI, 0, 0]}>
           <cylinderGeometry args={[0.045, 0.025, 0.03, 16]} />
-          <meshStandardMaterial color="#A0522D" roughness={0.6} />
+          <meshStandardMaterial color={colors.cup} roughness={0.6} />
         </mesh>
       </RigidBody>
 
@@ -298,18 +397,16 @@ export function KendamaRig() {
       <RigidBody
         ref={bigCupSensorRef}
         type="kinematicPosition"
-        position={[0, KEN_START_Y - KEN_HALF_HEIGHT - 0.05, 0]}
+        position={[positionX, KEN_START_Y - KEN_HALF_HEIGHT - 0.05, 0]}
         sensor
         onIntersectionEnter={({ other }) => {
-          // Only react when the tama (ball) enters the cup
           if (other.rigidBody === tamaRef.current) {
-            setCurrentState('CUPPED')
-            addToSequence('CUP')
+            handleCatch('CUP', 'CUPPED')
           }
         }}
         onIntersectionExit={({ other }) => {
           if (other.rigidBody === tamaRef.current) {
-            setCurrentState('AIRBORNE')
+            setCurrentState(playerId, 'AIRBORNE')
           }
         }}
       >
@@ -320,17 +417,16 @@ export function KendamaRig() {
       <RigidBody
         ref={smallCupSensorRef}
         type="kinematicPosition"
-        position={[0, KEN_START_Y + KEN_HALF_HEIGHT - 0.06, 0]}
+        position={[positionX, KEN_START_Y + KEN_HALF_HEIGHT - 0.06, 0]}
         sensor
         onIntersectionEnter={({ other }) => {
           if (other.rigidBody === tamaRef.current) {
-            setCurrentState('CUPPED')
-            addToSequence('CUP')
+            handleCatch('CUP', 'CUPPED')
           }
         }}
         onIntersectionExit={({ other }) => {
           if (other.rigidBody === tamaRef.current) {
-            setCurrentState('AIRBORNE')
+            setCurrentState(playerId, 'AIRBORNE')
           }
         }}
       >
@@ -341,12 +437,11 @@ export function KendamaRig() {
       <RigidBody
         ref={spikeSensorRef}
         type="kinematicPosition"
-        position={[0, KEN_START_Y + KEN_HALF_HEIGHT + 0.1, 0]}
+        position={[positionX, KEN_START_Y + KEN_HALF_HEIGHT + 0.1, 0]}
         sensor
         onIntersectionEnter={({ other }) => {
           if (other.rigidBody === tamaRef.current) {
-            setCurrentState('SPIKED')
-            addToSequence('SPIKE')
+            handleCatch('SPIKE', 'SPIKED')
           }
         }}
       >
@@ -358,7 +453,7 @@ export function KendamaRig() {
         <RigidBody
           key={i}
           ref={ref}
-          position={[0, segmentStartY(i), 0]}
+          position={[positionX, segmentStartY(i), 0]}
           linearDamping={0.8}
           angularDamping={1.2}
           colliders={false}
@@ -375,7 +470,7 @@ export function KendamaRig() {
       {/* ── Tama (ball) ─────────────────────────────────────────────────────── */}
       <RigidBody
         ref={tamaRef}
-        position={[0, TAMA_START_Y, 0]}
+        position={[positionX, TAMA_START_Y, 0]}
         linearDamping={0.15}
         angularDamping={0.4}
         restitution={0.35}
@@ -384,7 +479,7 @@ export function KendamaRig() {
         <BallCollider args={[TAMA_RADIUS]} />
         <mesh>
           <sphereGeometry args={[TAMA_RADIUS, 24, 24]} />
-          <meshStandardMaterial color="#E53935" roughness={0.5} />
+          <meshStandardMaterial color={colors.tama} roughness={0.5} />
         </mesh>
       </RigidBody>
 
@@ -418,10 +513,7 @@ export function KendamaRig() {
         anchorA={[0, 0, 0]}
         anchorB={[0, TAMA_RADIUS, 0]}
       />
-
-      {/* HUD rendered outside the Canvas via a React portal-like approach */}
-      {/* We place TrickHUD here so it's part of the same component tree */}
-    </>
+    </group>
   )
 }
 
