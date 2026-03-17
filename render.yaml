@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: kendama-3d
+    env: static
+    buildCommand: yarn && yarn build
+    staticPublishPath: ./dist
+    pullRequestPreviewsEnabled: true
+    headers:
+      - path: /*
+        name: Cache-Control
+        value: no-cache
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html

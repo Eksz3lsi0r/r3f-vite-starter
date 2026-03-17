@@ -6,12 +6,30 @@ yarn
 yarn dev
 ```
 
-## Mobile Access (iPhone / Android)
+## 🚀 Deploy (play from anywhere — no laptop required)
+
+### Option A — Render.com (recommended)
+
+1. Push this repo to GitHub.
+2. Go to [render.com](https://render.com) → **New → Static Site**.
+3. Connect your GitHub repo — Render will auto-detect `render.yaml` and configure everything.
+4. Click **Create Static Site**.  Render builds with `yarn build` and hosts the `dist/` folder.
+5. Your live URL (e.g. `https://kendama-3d.onrender.com`) works on any phone browser.
+
+### Option B — GitHub Pages (free, no extra account)
+
+1. In your GitHub repo settings → **Pages** → Source: **GitHub Actions**.
+2. Push to `main` (or `master`).  The workflow in `.github/workflows/deploy.yml` runs automatically.
+3. Your game will be live at `https://<your-username>.github.io/r3f-vite-starter/`.
+
+---
+
+## Mobile Access on the same Wi-Fi (local dev)
 
 The dev server exposes itself on all network interfaces, so you can test on any device on the same Wi-Fi network.
 
 1. Run `yarn dev` — Vite will print a **Network** URL, e.g. `http://192.168.x.x:5173`
-2. Open that URL in Safari (or any browser) on your iPhone
+2. Open that URL in Safari (or any browser) on your phone.
 3. On-screen touch controls appear automatically:
    - **D-pad** (left side) — move the ken left / right / forward / back
    - **↺ / ↻** — spin the ken
