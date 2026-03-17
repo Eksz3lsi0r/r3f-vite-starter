@@ -5,4 +5,8 @@
 
 body {
   margin: 0;
+  /* Prevent iOS scroll/bounce and double-tap zoom from interfering with the 3D scene */
+  overflow: hidden;
+  touch-action: none;
+  overscroll-behavior: none;
 }
