@@ -48,6 +48,9 @@ const TIME_WINDOW_DURATIONS: Record<TimeWindowTrick, number> = {
   REWIND_SLING: 2800,
 }
 
+/** Bonus multiplier applied when a trick lands during an active time window */
+const TIME_WINDOW_BONUS_MULTIPLIER = 0.5
+
 export const useDuelStore = create<DuelStore>((set) => ({
   activePlayer: 1,
   round: 1,
@@ -84,8 +87,7 @@ export const useDuelStore = create<DuelStore>((set) => ({
   addScore: (player, comboName) =>
     set((prev) => {
       const points = COMBO_POINTS[comboName] ?? 100
-      // Bonus points if scored during active time window
-      const windowBonus = prev.timeWindow ? Math.round(points * 0.5) : 0
+      const windowBonus = prev.timeWindow ? Math.round(points * TIME_WINDOW_BONUS_MULTIPLIER) : 0
       return {
         scores: {
           ...prev.scores,

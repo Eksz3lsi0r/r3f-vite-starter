@@ -10,3 +10,9 @@ body {
   touch-action: none;
   overscroll-behavior: none;
 }
+
+/* Time-window pulse animation used by DuelHUD */
+@keyframes pulse {
+  from { opacity: 1; transform: scale(1); }
+  to   { opacity: 0.8; transform: scale(1.03); }
+}

@@ -27,6 +27,18 @@ const TAMA_START_Y =
   (STRING_SEGMENTS + 1) * SEGMENT_LENGTH -
   TAMA_RADIUS
 
+// ─── Trick physics tuning ────────────────────────────────────────────────────
+const TRICK_PHYSICS = {
+  THROW:        { impulseY: 4.5 },
+  MOVE:         { impulseScale: 0.18 },
+  SPIN:         { torqueScale: 0.08 },
+  FLIP:         { torqueX: 0.15, impulseY: 1.5 },       // forward torque + lift
+  SLING:        { impulseX: 1.2, impulseY: 2.0, torqueZ: 0.1 }, // lateral swing + lift
+  GHOST:        { impulseY: 0.8 },                       // subtle upward lift
+  REWIND_FLIP:  { torqueX: -0.15, impulseY: 1.5 },      // reverse flip
+  REWIND_SLING: { impulseX: -1.2, impulseY: 2.0, torqueZ: -0.1 }, // reverse sling
+} as const
+
 // Player colours
 const PLAYER_COLORS: Record<PlayerId, { tama: string; ken: string; cup: string }> = {
   1: { tama: '#E53935', ken: '#8B4513', cup: '#A0522D' },
@@ -234,14 +246,14 @@ export function KendamaRig({ playerId, positionX = 0 }: KendamaRigProps) {
     // Space – one-shot throw impulse
     const spaceNow = !!keys['Space']
     if (spaceNow && !prevSpaceRef.current) {
-      kenRef.current.applyImpulse({ x: 0, y: 4.5, z: 0 }, true)
+      kenRef.current.applyImpulse({ x: 0, y: TRICK_PHYSICS.THROW.impulseY, z: 0 }, true)
       setCurrentState(playerId, 'AIRBORNE')
       addToSequence(playerId, 'THROW')
     }
     prevSpaceRef.current = spaceNow
 
     // Directional impulses (continuous while held)
-    const impulseScale = 0.18
+    const { impulseScale } = TRICK_PHYSICS.MOVE
     if (keys['ArrowLeft'])
       kenRef.current.applyImpulse({ x: -impulseScale, y: 0, z: 0 }, true)
     if (keys['ArrowRight'])
@@ -252,7 +264,7 @@ export function KendamaRig({ playerId, positionX = 0 }: KendamaRigProps) {
       kenRef.current.applyImpulse({ x: 0, y: 0, z: impulseScale }, true)
 
     // Torque for spin / tilt – one-shot per key press to avoid flooding sequence
-    const torqueScale = 0.08
+    const { torqueScale } = TRICK_PHYSICS.SPIN
     const qNow = !!keys['KeyQ']
     const eNow = !!keys['KeyE']
     if (qNow) kenRef.current.applyTorqueImpulse({ x: 0, y: torqueScale, z: 0 }, true)
@@ -266,8 +278,8 @@ export function KendamaRig({ playerId, positionX = 0 }: KendamaRigProps) {
     // Flip (F) – strong forward torque to flip the ken
     const fNow = !!keys['KeyF']
     if (fNow && !prevFRef.current) {
-      kenRef.current.applyTorqueImpulse({ x: 0.15, y: 0, z: 0 }, true)
-      kenRef.current.applyImpulse({ x: 0, y: 1.5, z: 0 }, true)
+      kenRef.current.applyTorqueImpulse({ x: TRICK_PHYSICS.FLIP.torqueX, y: 0, z: 0 }, true)
+      kenRef.current.applyImpulse({ x: 0, y: TRICK_PHYSICS.FLIP.impulseY, z: 0 }, true)
       addToSequence(playerId, 'FLIP')
       startTimeWindow('FLIP')
     }
@@ -276,8 +288,8 @@ export function KendamaRig({ playerId, positionX = 0 }: KendamaRigProps) {
     // Sling (G) – lateral swing + upward impulse
     const gNow = !!keys['KeyG']
     if (gNow && !prevGRef.current) {
-      kenRef.current.applyImpulse({ x: 1.2, y: 2.0, z: 0 }, true)
-      kenRef.current.applyTorqueImpulse({ x: 0, y: 0, z: 0.1 }, true)
+      kenRef.current.applyImpulse({ x: TRICK_PHYSICS.SLING.impulseX, y: TRICK_PHYSICS.SLING.impulseY, z: 0 }, true)
+      kenRef.current.applyTorqueImpulse({ x: 0, y: 0, z: TRICK_PHYSICS.SLING.torqueZ }, true)
       addToSequence(playerId, 'SLING')
       startTimeWindow('SLING')
     }
@@ -286,7 +298,7 @@ export function KendamaRig({ playerId, positionX = 0 }: KendamaRigProps) {
     // Ghost (H) – very subtle upward lift
     const hNow = !!keys['KeyH']
     if (hNow && !prevHRef.current) {
-      kenRef.current.applyImpulse({ x: 0, y: 0.8, z: 0 }, true)
+      kenRef.current.applyImpulse({ x: 0, y: TRICK_PHYSICS.GHOST.impulseY, z: 0 }, true)
       addToSequence(playerId, 'GHOST')
       startTimeWindow('GHOST')
     }
@@ -295,8 +307,8 @@ export function KendamaRig({ playerId, positionX = 0 }: KendamaRigProps) {
     // Rewind Flip (R) – reverse direction flip
     const rNow = !!keys['KeyR']
     if (rNow && !prevRRef.current) {
-      kenRef.current.applyTorqueImpulse({ x: -0.15, y: 0, z: 0 }, true)
-      kenRef.current.applyImpulse({ x: 0, y: 1.5, z: 0 }, true)
+      kenRef.current.applyTorqueImpulse({ x: TRICK_PHYSICS.REWIND_FLIP.torqueX, y: 0, z: 0 }, true)
+      kenRef.current.applyImpulse({ x: 0, y: TRICK_PHYSICS.REWIND_FLIP.impulseY, z: 0 }, true)
       addToSequence(playerId, 'REWIND_FLIP')
       startTimeWindow('REWIND_FLIP')
     }
@@ -305,8 +317,8 @@ export function KendamaRig({ playerId, positionX = 0 }: KendamaRigProps) {
     // Rewind Sling (T) – reverse lateral swing
     const tNow = !!keys['KeyT']
     if (tNow && !prevTRef.current) {
-      kenRef.current.applyImpulse({ x: -1.2, y: 2.0, z: 0 }, true)
-      kenRef.current.applyTorqueImpulse({ x: 0, y: 0, z: -0.1 }, true)
+      kenRef.current.applyImpulse({ x: TRICK_PHYSICS.REWIND_SLING.impulseX, y: TRICK_PHYSICS.REWIND_SLING.impulseY, z: 0 }, true)
+      kenRef.current.applyTorqueImpulse({ x: 0, y: 0, z: TRICK_PHYSICS.REWIND_SLING.torqueZ }, true)
       addToSequence(playerId, 'REWIND_SLING')
       startTimeWindow('REWIND_SLING')
     }

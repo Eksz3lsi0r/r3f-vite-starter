@@ -1,6 +1,12 @@
 import { useEffect, useState } from 'react'
 import { useDuelStore } from '../store/useDuelStore'
 
+function determineWinner(s1: number, s2: number): string {
+  if (s1 > s2) return 'P1 Wins!'
+  if (s2 > s1) return 'P2 Wins!'
+  return 'Draw!'
+}
+
 /** Duel overlay showing round info, scores, active player, and time window */
 export function DuelHUD() {
   const activePlayer = useDuelStore((s) => s.activePlayer)
@@ -42,11 +48,7 @@ export function DuelHUD() {
 
   const p1Active = activePlayer === 1
   const winner = duelOver
-    ? scores[1] > scores[2]
-      ? 'P1 Wins!'
-      : scores[2] > scores[1]
-        ? 'P2 Wins!'
-        : 'Draw!'
+    ? determineWinner(scores[1], scores[2])
     : null
 
   return (
@@ -126,7 +128,7 @@ export function DuelHUD() {
             animation: 'pulse 0.5s ease-in-out infinite alternate',
           }}
         >
-          ⏱ {timeWindow.type.replace('_', ' ')} window:{' '}
+          ⏱ {timeWindow.type.replace(/_/g, ' ')} window:{' '}
           {(timeLeft / 1000).toFixed(1)}s — Land it for bonus!
         </div>
       )}

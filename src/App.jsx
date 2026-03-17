@@ -16,6 +16,7 @@ function App() {
       {/* Touch controls overlay for mobile devices */}
       <MobileControls />
 
+      {/* Pulled back to frame both kendamas side by side */}
       <Canvas
         shadows
         camera={{ position: [0, 2, 7], fov: 50 }}
