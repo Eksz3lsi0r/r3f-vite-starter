@@ -1,12 +1,22 @@
 import { Canvas } from "@react-three/fiber";
 import { Experience } from "./components/Experience";
+import { TrickHUD } from "./components/KendamaRig";
 
 function App() {
   return (
-    <Canvas shadows camera={{ position: [3, 3, 3], fov: 30 }}>
-      <color attach="background" args={["#ececec"]} />
-      <Experience />
-    </Canvas>
+    <>
+      {/* DOM HUD rendered outside the Canvas so it stays on top */}
+      <TrickHUD />
+
+      <Canvas
+        shadows
+        camera={{ position: [0, 2, 5], fov: 50 }}
+        style={{ width: "100vw", height: "100vh" }}
+      >
+        <color attach="background" args={["#1a1a2e"]} />
+        <Experience />
+      </Canvas>
+    </>
   );
 }
 
