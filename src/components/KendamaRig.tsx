@@ -145,6 +145,8 @@ function TrickHUD() {
       )}
       <div style={{ marginTop: 6, fontSize: 11, opacity: 0.7 }}>
         Space: throw &nbsp;|&nbsp; Arrows: move &nbsp;|&nbsp; Q/E: spin
+        <br />
+        <span style={{ opacity: 0.6 }}>📱 Touch: use on-screen buttons</span>
       </div>
     </div>
   )
